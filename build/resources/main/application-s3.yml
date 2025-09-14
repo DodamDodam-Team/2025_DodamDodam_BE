@@ -1,0 +1,18 @@
+cloud:
+  aws:
+    credentials:
+      accessKey: # [새로 발급받은 AWS Access Key]
+      secretKey: # [새로 발급받은 AWS Secret Key]
+    s3:
+      bucket: dodamdodam
+      dir: images/
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
