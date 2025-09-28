@@ -39,8 +39,14 @@ public class SecurityConfig {
 
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/join", "/api/login").permitAll() // 회원가입과 로그인은 모두에게 허용
-                        .anyRequest().authenticated() // 그 외의 모든 요청은 인증 필요
+                        .requestMatchers( "/",
+                                "/oauth2/**",
+                                "/login/**",
+                                "/api/**",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/webjars/**").permitAll()
+                        .anyRequest().authenticated()
                 );
 
         http

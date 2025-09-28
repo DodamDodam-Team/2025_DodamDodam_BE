@@ -6,27 +6,31 @@ import com.dodamdodam.dodamdodam.login.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
-public class UserController {
+public class UserController implements UserDocsController {
 
     private final UserService userService;
 
+    @Override
     @PostMapping("/join")
     public ResponseEntity<String> join(@RequestBody JoinRequest joinRequest) {
         userService.join(joinRequest);
         return ResponseEntity.ok("회원가입 성공!");
     }
 
+    @Override
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest loginRequest) {
         String jwt = userService.login(loginRequest);
         return ResponseEntity.ok(jwt);
     }
 
+    @Override
     @GetMapping("/info")
     public ResponseEntity<String> getUserInfo(Authentication authentication) {
         String username = authentication.getName();

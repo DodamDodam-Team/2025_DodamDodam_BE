@@ -6,15 +6,15 @@ spring:
     password: Skrud468@@
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
       defer-datasource-initialization : true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
         show-sql: true
-  jwt:
-    secretKey: vmfhaltmskdlstkfkdgodyroqkfwkdbalroqkfwkdbalaaaaaaaaaaaaaaaabbbbb
+jwt:
+  secretKey: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0dXNlciIsImlhdCI6MTc1OTA1NDc4OX0.tJFnbra-JaBM_vxZLWmWu0ffmDe7qEjwHy-Y2spFmJo
 logging:
   level:
     org.springframework.security: TRACE
