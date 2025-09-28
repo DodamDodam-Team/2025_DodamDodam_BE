@@ -29,6 +29,7 @@ public class UserService {
         User user = User.builder()
                 .username(joinRequest.getUsername())
                 .password(encryptedPassword)
+                .role("ROLE_USER")
                 .build();
 
         userRepository.save(user);
