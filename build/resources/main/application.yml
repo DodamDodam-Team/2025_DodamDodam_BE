@@ -2,6 +2,6 @@ spring:
   profiles:
     default: local-env
     group:
-      local-env: local, swagger, s3, map
-      prod-env: prod, swagger, s3, map
+      local-env: local, swagger
+      prod-env: prod, swagger
 
