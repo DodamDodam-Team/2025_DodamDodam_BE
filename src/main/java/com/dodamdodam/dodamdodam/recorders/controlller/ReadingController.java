@@ -39,7 +39,7 @@ public class ReadingController implements ReadingDocsController {
             @RequestBody CreateRecordRequestDto requestDto,
             @PathVariable Long userId) {
 
-        log.info("독서 기록 생성 요청: userId={}, date={}", userId, requestDto.getDate());
+        log.info("독서 기록 생성 요청: userId={}, date={}", userId, requestDto.getReadDate());
 
         CreateRecordResponseDto responseDto = readingService.createRecord(requestDto, userId);
 

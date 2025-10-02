@@ -6,6 +6,7 @@ import com.dodamdodam.dodamdodam.recorders.repository.ReadingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // Transactional 추가
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true) // 읽기 전용 메소드가 많으므로 클래스 레벨에 readOnly 설정
 public class ReadingService {
 
     private final ReadingRepository readingRepository;
@@ -28,31 +30,38 @@ public class ReadingService {
         return getMonthlyReadingSummary(userId, month.getYear(), month.getMonthValue());
     }
 
-    // --- [수정] ---
-    // userId를 파라미터로 추가하고, 내부 로직을 빌더 패턴으로 변경
+    // --- [수정된 부분 시작] ---
+    @Transactional // 데이터를 저장하므로 readOnly가 아닌 일반 Transactional 적용
     public CreateRecordResponseDto createRecord(CreateRecordRequestDto requestDto, Long userId) {
 
-        // --- 빌더 패턴으로 객체 생성 ---
+        // 1. 독서 시간을 먼저 계산합니다.
+        Integer durationMinutes = 0;
+        if (requestDto.getStartTime() != null && requestDto.getEndTime() != null) {
+            // Duration.between().toMinutes()는 분 단위로만 계산하므로 ChronoUnit을 사용해 초 단위까지 고려할 수 있습니다.
+            // 여기서는 분 단위로 충분하므로 toMinutes()를 유지합니다.
+            durationMinutes = (int) Duration.between(requestDto.getStartTime(), requestDto.getEndTime()).toMinutes();
+        }
+
+        // 2. 빌더 패턴을 사용하여 Reading 엔티티를 생성합니다.
         Reading newRecord = Reading.builder()
-                .userId(userId) // userId 설정
-                .readDate(requestDto.getDate())
+                .userId(userId)
+                .readDate(requestDto.getReadDate()) // DTO의 필드명과 일치시킴 (getDate -> getReadDate)
                 .startTime(requestDto.getStartTime())
                 .endTime(requestDto.getEndTime())
                 .pagesRead(requestDto.getPagesRead())
                 .thought(requestDto.getThought())
+                .readDurationMinutes(durationMinutes) // 계산된 값을 빌더에 추가
+                .readBookId(requestDto.getReadBookId())
+                .readBookTitle(requestDto.getReadBookTitle())
+                .isGoalAchieved(requestDto.getIsGoalAchieved())
+                .isBookCompletedForThisLog(requestDto.getIsBookCompletedForThisLog())
                 .build();
 
-        if (requestDto.getStartTime() != null && requestDto.getEndTime() != null) {
-            long duration = Duration.between(requestDto.getStartTime(), requestDto.getEndTime()).toMinutes();
-            // TODO: 엔티티에 setter가 없으므로 이 값도 빌더에 포함시켜야 합니다.
-            // 아래는 임시 방편이며, 실제로는 빌더에 readDurationMinutes를 추가해야 합니다.
-            // newRecord.setReadDurationMinutes((int) duration);
-        }
-
         Reading savedRecord = readingRepository.save(newRecord);
+
         return new CreateRecordResponseDto(savedRecord.getId(), "독서 기록이 성공적으로 생성되었습니다.");
     }
-    // --- [수정 완료] ---
+    // --- [수정된 부분 끝] ---
 
 
     private MonthlySummaryDto getMonthlyReadingSummary(Long userId, int year, int month) {
