@@ -4,29 +4,23 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Question {
+public class QuizOption {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_id")
-    private Quiz quiz;
+    @JoinColumn(name = "question_id")
+    private Question question;
 
     @Column(nullable = false)
-    private String questionText;
+    private String optionText; // 보기 내용 (예: "B-612")
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private QuestionType questionType;
-
-    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<QuizOption> options = new ArrayList<>();
+    private boolean isCorrect; // 이 보기가 정답인지 여부 (true/false)
 }

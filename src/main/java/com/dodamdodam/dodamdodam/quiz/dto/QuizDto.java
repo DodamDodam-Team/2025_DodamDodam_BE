@@ -7,7 +7,7 @@ import java.util.List;
 
 public class QuizDto {
 
-    // 퀴즈 조회 시 응답
+    // --- 퀴즈 조회 DTO ---
     @Data
     @Builder
     public static class QuizResponseDto {
@@ -16,48 +16,35 @@ public class QuizDto {
         private List<QuestionResponseDto> questions;
     }
 
-    // 퀴즈 조회 시 질문 형식 (정답 제외)
     @Data
     @Builder
     public static class QuestionResponseDto {
         private Long questionId;
         private String questionText;
         private QuestionType questionType;
-        private List<String> options;
+        private List<OptionDto> options;
     }
 
-    // 퀴즈 제출 시 요청
     @Data
-    public static class QuizSubmitRequestDto {
-        private Long quizId;
-        private List<AnswerSubmitDto> answers;
+    @Builder
+    public static class OptionDto {
+        private Long optionId;
+        private String optionText;
     }
 
-    // 사용자가 제출한 개별 답안
+    // --- 퀴즈 제출 및 채점 DTO ---
     @Data
-    public static class AnswerSubmitDto {
+    public static class QuizSubmitRequestDto { // ✅ 컨트롤러에서 찾지 못하는 클래스가 바로 이 클래스입니다.
         private Long questionId;
-        private String submittedAnswer;
+        private Long selectedOptionId;
     }
 
-    // 채점 결과 응답
     @Data
     @Builder
     public static class QuizGradeResponseDto {
-        private Long quizId;
-        private int totalQuestions;
-        private int correctAnswers;
-        private double score;
-        private List<GradedAnswerDto> results;
-    }
-
-    // 채점된 개별 답안 결과
-    @Data
-    @Builder
-    public static class GradedAnswerDto {
         private Long questionId;
-        private String submittedAnswer;
-        private String correctAnswer;
+        private Long selectedOptionId;
         private boolean isCorrect;
+        private String message;
     }
 }

@@ -1,9 +1,16 @@
 package com.dodamdodam.dodamdodam.quiz.service;
 
+import com.dodamdodam.dodamdodam.login.entity.User;
+import com.dodamdodam.dodamdodam.login.repository.UserRepository;
 import com.dodamdodam.dodamdodam.quiz.dto.QuizDto;
 import com.dodamdodam.dodamdodam.quiz.entity.Question;
 import com.dodamdodam.dodamdodam.quiz.entity.Quiz;
+import com.dodamdodam.dodamdodam.quiz.entity.QuizOption;
+import com.dodamdodam.dodamdodam.quiz.entity.QuizSubmission;
+import com.dodamdodam.dodamdodam.quiz.repository.QuestionRepository;
+import com.dodamdodam.dodamdodam.quiz.repository.QuizOptionRepository;
 import com.dodamdodam.dodamdodam.quiz.repository.QuizRepository;
+import com.dodamdodam.dodamdodam.quiz.repository.QuizSubmissionRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
@@ -12,6 +19,7 @@ import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,14 +31,28 @@ import java.util.stream.Collectors;
 public class QuizService {
 
     private final QuizRepository quizRepository;
-    private final ObjectMapper objectMapper;
+    private final QuestionRepository questionRepository;
+    private final QuizOptionRepository quizOptionRepository;
+    private final UserRepository userRepository;
+    private final QuizSubmissionRepository submissionRepository;
 
+    // 퀴즈 조회 (ObjectMapper 제거, 더 효율적으로 변경)
     public QuizDto.QuizResponseDto getQuizForBook(Long bookId) {
         Quiz quiz = quizRepository.findByBookId(bookId)
-                .orElseThrow(() -> new EntityNotFoundException("해당 책에 대한 퀴즈를 찾을 수 없습니다. bookId: " + bookId));
+                .orElseThrow(() -> new EntityNotFoundException("해당 책에 대한 퀴즈를 찾을 수 없습니다."));
 
         List<QuizDto.QuestionResponseDto> questionDtos = quiz.getQuestions().stream()
-                .map(this::convertQuestionToDto)
+                .map(question -> QuizDto.QuestionResponseDto.builder()
+                        .questionId(question.getId())
+                        .questionText(question.getQuestionText())
+                        .questionType(question.getQuestionType())
+                        .options(question.getOptions().stream()
+                                .map(option -> QuizDto.OptionDto.builder()
+                                        .optionId(option.getId())
+                                        .optionText(option.getOptionText())
+                                        .build())
+                                .collect(Collectors.toList()))
+                        .build())
                 .collect(Collectors.toList());
 
         return QuizDto.QuizResponseDto.builder()
@@ -40,54 +62,31 @@ public class QuizService {
                 .build();
     }
 
+    // 채점 및 제출 기록 저장 (훨씬 안전하고 강력하게 변경)
     @Transactional
-    public QuizDto.QuizGradeResponseDto gradeQuiz(QuizDto.QuizSubmitRequestDto submitRequest, Long userId) {
-        Quiz quiz = quizRepository.findById(submitRequest.getQuizId())
-                .orElseThrow(() -> new EntityNotFoundException("퀴즈를 찾을 수 없습니다. quizId: " + submitRequest.getQuizId()));
+    public QuizDto.QuizGradeResponseDto submitAnswer(QuizDto.QuizSubmitRequestDto request, Long userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("유저를 찾을 수 없습니다."));
+        Question question = questionRepository.findById(request.getQuestionId()).orElseThrow(() -> new EntityNotFoundException("문제를 찾을 수 없습니다."));
+        QuizOption selectedOption = quizOptionRepository.findById(request.getSelectedOptionId()).orElseThrow(() -> new EntityNotFoundException("보기를 찾을 수 없습니다."));
 
-        Map<Long, String> correctAnswers = quiz.getQuestions().stream()
-                .collect(Collectors.toMap(Question::getId, Question::getCorrectAnswer));
+        // ✅ ID로 안전하게 정답 확인
+        boolean isCorrect = selectedOption.isCorrect();
 
-        int correctCount = 0;
-        List<QuizDto.GradedAnswerDto> results = new ArrayList<>();
-
-        for (QuizDto.AnswerSubmitDto submittedAnswer : submitRequest.getAnswers()) {
-            Long questionId = submittedAnswer.getQuestionId();
-            String correctAnswer = correctAnswers.get(questionId);
-            boolean isCorrect = correctAnswer != null && correctAnswer.equals(submittedAnswer.getSubmittedAnswer());
-
-            if (isCorrect) {
-                correctCount++;
-            }
-
-            results.add(QuizDto.GradedAnswerDto.builder()
-                    .questionId(questionId)
-                    .submittedAnswer(submittedAnswer.getSubmittedAnswer())
-                    .correctAnswer(correctAnswer)
-                    .isCorrect(isCorrect)
-                    .build());
-        }
-
-
-        double score = (double) correctCount / quiz.getQuestions().size() * 100;
+        // ✅ 사용자 응답 기록을 DB에 저장!
+        QuizSubmission submission = QuizSubmission.builder()
+                .user(user)
+                .question(question)
+                .selectedOption(selectedOption)
+                .isCorrect(isCorrect)
+                .submittedAt(LocalDateTime.now())
+                .build();
+        submissionRepository.save(submission);
 
         return QuizDto.QuizGradeResponseDto.builder()
-                .quizId(quiz.getId())
-                .totalQuestions(quiz.getQuestions().size())
-                .correctAnswers(correctCount)
-                .score(score)
-                .results(results)
-                .build();
-    }
-
-    @SneakyThrows
-    private QuizDto.QuestionResponseDto convertQuestionToDto(Question question) {
-        List<String> options = objectMapper.readValue(question.getOptions(), new TypeReference<>() {});
-        return QuizDto.QuestionResponseDto.builder()
                 .questionId(question.getId())
-                .questionText(question.getQuestionText())
-                .questionType(question.getQuestionType())
-                .options(options)
+                .selectedOptionId(selectedOption.getId())
+                .isCorrect(isCorrect)
+                .message(isCorrect ? "정답입니다!" : "아쉬워요, 다음엔 맞출 수 있을 거예요!")
                 .build();
     }
 }

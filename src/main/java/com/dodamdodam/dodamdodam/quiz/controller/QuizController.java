@@ -37,7 +37,7 @@ public class QuizController implements QuizDocsController {
         // 안전하게 사용자 ID를 가져올 수 있습니다.
         Long userId = userDetails.getUserId();
 
-        QuizDto.QuizGradeResponseDto grade = quizService.gradeQuiz(submitRequest, userId);
+        QuizDto.QuizGradeResponseDto grade = quizService.submitAnswer(submitRequest, userId);
         return ResponseEntity.ok(grade);
     }
 }
