@@ -24,4 +24,7 @@ public class Quiz {
 
     @OneToMany(mappedBy = "quiz", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Question> questions = new ArrayList<>();
+
+    public Quiz(Long bookId, String title) { this.bookId = bookId; this.title = title; }
+    public void addQuestion(Question question) { this.questions.add(question); }
 }

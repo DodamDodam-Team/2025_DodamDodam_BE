@@ -14,7 +14,7 @@ spring:
         format_sql: true
         show-sql: true
 jwt:
-  secretKey: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0dXNlciIsImlhdCI6MTc1OTA1Nzk4M30._Gp1_VWYjWcKMkm_4-V_nBrESlr3n2MAjOKktveBAtw
+  secretKey: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0dXNlciIsImlhdCI6MTc1OTI1MTg4MiwiZXhwIjoxNzU5MjU1NDgyfQ.rB_Ybs4Y_lnLAOmt3kSQbV7HYdDIl61mHtsQO-TQ8lQ
 logging:
   level:
     org.springframework.security: TRACE

@@ -5,6 +5,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -25,10 +28,9 @@ public class Question {
     @Column(nullable = false)
     private QuestionType questionType;
 
-    // 보기 목록을 JSON 문자열로 저장 (예: ["보기1", "보기2", "보기3"])
-    @Column(columnDefinition = "TEXT")
-    private String options;
+    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<QuizOption> quizOptions = new ArrayList<>();
 
-    @Column(nullable = false)
-    private String correctAnswer;
+    public Question(Quiz quiz, String text, QuestionType type) { this.quiz = quiz; this.questionText = text; this.questionType = type; }
+    public void addOption(QuizOption option) { this.quizOptions.add(option); }
 }

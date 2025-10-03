@@ -2,6 +2,7 @@ package com.dodamdodam.dodamdodam.quiz.controller;
 
 import com.dodamdodam.dodamdodam.jwt.service.CustomUserDetails;
 import com.dodamdodam.dodamdodam.quiz.dto.QuizDto;
+import com.dodamdodam.dodamdodam.quiz.service.QuizDataService;
 import com.dodamdodam.dodamdodam.quiz.service.QuizService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +32,8 @@ public class QuizController implements QuizDocsController {
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         Long userId = userDetails.getUserId();
 
-        QuizDto.QuizGradeResponseDto grade = quizService.gradeQuiz(submitRequest, userId);
+        QuizDto.QuizGradeResponseDto grade = quizService.submitAnswer(submitRequest, userId);
+
         return ResponseEntity.ok(grade);
     }
 }
