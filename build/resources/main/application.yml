@@ -1,7 +1,0 @@
-spring:
-  profiles:
-    default: local-env
-    group:
-      local-env: local, swagger
-      prod-env: prod, swagger
-
