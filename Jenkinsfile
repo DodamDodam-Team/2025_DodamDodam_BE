@@ -32,16 +32,18 @@ pipeline {
         stage('Determine Next Image Tag') {
             steps {
                 script {
-                    def existingTags = sh(
-                        script: "aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --query 'imageIds[*].imageTag' --output text",
-                        returnStdout: true
-                    ).trim().split("\\s+")
+                    // 안전하게 AWS CLI 출력이 비어있거나 null인 경우 처리
+                    def stdout = sh(script: "aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --query 'imageIds[*].imageTag' --output text", returnStdout: true).trim()
+                    def existingTags = []
+                    if (stdout) {
+                        existingTags = stdout.split("\\s+")
+                    }
 
                     def latestVersion = 'v1.0.0'
 
-                    if (existingTags) {
+                    if (existingTags && existingTags.size() > 0) {
                         def versions = existingTags.findAll { it ==~ /v\\d+\\.\\d+\\.\\d+/ }
-                        if (versions) {
+                        if (versions && versions.size() > 0) {
                             versions.sort { a, b ->
                                 def aParts = a.replace('v','').split('\\.').collect { it.toInteger() }
                                 def bParts = b.replace('v','').split('\\.').collect { it.toInteger() }
@@ -67,7 +69,18 @@ pipeline {
         stage('Build Spring Boot') {
             steps {
                 echo "Building Spring Boot App with Gradle"
-                sh './gradlew clean build -x test'
+                script {
+                    // gradle wrapper jar가 없으면 시스템 gradle을 사용하도록 처리
+                    if (fileExists('gradle/wrapper/gradle-wrapper.jar')) {
+                        sh './gradlew clean build -x test'
+                    } else if (fileExists('gradlew')) {
+                        // 일부 환경에서 gradlew가 스크립트로 존재하지만 wrapper jar가 없는 경우
+                        sh './gradlew clean build -x test' 
+                    } else {
+                        // 시스템 gradle 명령 사용 (사전 설치되어 있어야 함)
+                        sh 'gradle clean build -x test'
+                    }
+                }
             }
         }
 
