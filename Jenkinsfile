@@ -69,7 +69,11 @@ pipeline {
             steps {
                 echo "Building Spring Boot App with Gradle"
                 script {
-                    if (fileExists('gradle/wrapper/gradle-wrapper.jar')) {
+                    if (fileExists('gradlew')) {
+                        sh 'chmod +x gradlew || true'
+                        sh './gradlew clean build -x test'
+                    } else if (fileExists('gradle/wrapper/gradle-wrapper.jar')) {
+                        sh 'chmod +x gradlew || true'
                         sh './gradlew clean build -x test'
                     } else {
                         sh 'gradle clean build -x test'
