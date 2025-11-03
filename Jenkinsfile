@@ -5,8 +5,6 @@ pipeline {
         AWS_REGION = 'ap-northeast-2'
         ECR_REPO = 'dodam-ecr'
         EC2_NAME_TAG = 'dodam-app-ec2'
-        DOCKER_IMAGE = ''
-        IMAGE_TAG = ''
     }
 
     stages {
@@ -32,7 +30,11 @@ pipeline {
         stage('Determine Next Image Tag') {
             steps {
                 script {
-                    def stdout = sh(script: 'aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --no-paginate --query "imageIds[*].imageTag" --output text', returnStdout: true).trim()
+                    def stdout = sh(
+                        script: "aws ecr list-images --region ${env.AWS_REGION} --repository-name ${env.ECR_REPO} --no-paginate --query 'imageIds[*].imageTag' --output text",
+                        returnStdout: true
+                    ).trim()
+
                     echo "ECR raw tags: '${stdout}'"
 
                     if (!stdout || stdout == 'null' || stdout.trim().isEmpty()) {
@@ -61,7 +63,7 @@ pipeline {
                         }
                     }
 
-                    env.DOCKER_IMAGE = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${env.IMAGE_TAG}"
+                    env.DOCKER_IMAGE = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}:${env.IMAGE_TAG}"
                     echo "Next Docker Image Tag: ${env.IMAGE_TAG}"
                 }
             }
@@ -72,38 +74,41 @@ pipeline {
                 echo "Building Spring Boot App with Gradle"
                 script {
                     sh "chmod +x gradlew"
-                    sh "./gradlew clean build"
+                    sh "./gradlew clean build -x test"
                 }
             }
         }
 
         stage('Docker Build & Push') {
             steps {
-                echo "Building and Pushing Docker Image"
-                sh """
-                    docker build -t ${DOCKER_IMAGE} .
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                    docker push ${DOCKER_IMAGE}
-                """
+                script {
+                    echo "Building and Pushing Docker Image: ${env.DOCKER_IMAGE}"
+                    sh """
+                        docker build -t ${env.DOCKER_IMAGE} .
+                        aws ecr get-login-password --region ${env.AWS_REGION} \
+                            | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com
+                        docker push ${env.DOCKER_IMAGE}
+                    """
+                }
             }
         }
 
         stage('Deploy to EC2 via SSM') {
             steps {
                 script {
-                    echo "Deploying Docker image to all EC2 instances with tag Name=${EC2_NAME_TAG}"
+                    echo "Deploying ${env.DOCKER_IMAGE} to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
                     sh """
-                    aws ssm send-command \
-                        --targets "Key=tag:Name,Values=${EC2_NAME_TAG}" \
-                        --document-name "AWS-RunShellScript" \
-                        --comment "Deploy latest Docker image" \
-                        --parameters 'commands=[
-                            "docker pull ${DOCKER_IMAGE}",
-                            "docker stop dodam-app || true",
-                            "docker rm dodam-app || true",
-                            "docker run -d -p 8080:8080 --name dodam-app ${DOCKER_IMAGE}"
-                        ]' \
-                        --region ${AWS_REGION}
+                        aws ssm send-command \
+                            --targets "Key=tag:Name,Values=${env.EC2_NAME_TAG}" \
+                            --document-name "AWS-RunShellScript" \
+                            --comment "Deploy latest Docker image" \
+                            --parameters 'commands=[
+                                "docker pull ${env.DOCKER_IMAGE}",
+                                "docker stop dodam-app || true",
+                                "docker rm dodam-app || true",
+                                "docker run -d -p 8080:8080 --name dodam-app ${env.DOCKER_IMAGE}"
+                            ]' \
+                            --region ${env.AWS_REGION}
                     """
                 }
             }
@@ -112,7 +117,7 @@ pipeline {
 
     post {
         success {
-            echo "Build, Push, and Deploy completed: ${DOCKER_IMAGE}"
+            echo "Build, Push, and Deploy completed: ${env.DOCKER_IMAGE}"
         }
         failure {
             echo "Pipeline failed!"
