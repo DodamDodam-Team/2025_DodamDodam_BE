@@ -42,8 +42,9 @@ pipeline {
                         env.IMAGE_TAG = 'v1.0.0'
                     } else {
                         def existingTags = stdout.split("\\s+")
-                        def semver = ~/v\\d+\\.\\d+\\.\\d+/
+                        def semver = ~/v\d+\.\d+\.\d+/
                         def versions = existingTags.findAll { it ==~ semver }
+
 
                         if (versions && versions.size() > 0) {
                             versions.sort { a, b ->
@@ -96,20 +97,50 @@ pipeline {
         stage('Deploy to EC2 via SSM') {
             steps {
                 script {
-                    echo "Deploying ${env.DOCKER_IMAGE} to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
-                    sh """
-                        aws ssm send-command \
-                            --targets "Key=tag:Name,Values=${env.EC2_NAME_TAG}" \
-                            --document-name "AWS-RunShellScript" \
-                            --comment "Deploy latest Docker image" \
-                            --parameters 'commands=[
-                                "docker pull ${env.DOCKER_IMAGE}",
-                                "docker stop dodam-app || true",
-                                "docker rm dodam-app || true",
-                                "docker run -d -p 8080:8080 --name dodam-app ${env.DOCKER_IMAGE}"
-                            ]' \
-                            --region ${env.AWS_REGION}
-                    """
+                    echo "1. Sending Deployment Command to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
+
+                    def commandOutput = sh(
+                        script: """
+                            aws ssm send-command \\
+                                --targets "Key=tag:Name,Values=${env.EC2_NAME_TAG}" \\
+                                --document-name "AWS-RunShellScript" \\
+                                --comment "Deploy latest Docker image: ${env.DOCKER_IMAGE}" \\
+                                --parameters 'commands=[
+                                    "docker pull ${env.DOCKER_IMAGE}",
+                                    "docker stop dodam-cnt  || true",
+                                    "docker rm dodam-cnt  || true",
+                                    "docker run -d -p 8080:8080 --name dodam-cnt ${env.DOCKER_IMAGE}"
+                                ]' \\
+                                --region ${env.AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    def commandId = new groovy.json.JsonSlurper().parseText(commandOutput).Command.CommandId
+                    env.SSM_COMMAND_ID = commandId
+                    echo "SSM Command ID: ${env.SSM_COMMAND_ID}"
+
+                    echo "2. Polling SSM Command Status for ID: ${env.SSM_COMMAND_ID}"
+                    
+                    retry(10) { 
+                        sleep(time: 10, unit: 'SECONDS')
+
+                        def statusOutput = sh(
+                            script: "aws ssm list-commands --command-id ${env.SSM_COMMAND_ID} --query 'Commands[0].Status' --output text --region ${env.AWS_REGION}",
+                            returnStdout: true
+                        ).trim()
+
+                        echo "Current Status: ${statusOutput}"
+
+                        if (statusOutput == 'Success') {
+                            echo "Deployment Successful on all targets!"
+                        } else if (statusOutput == 'Failed' || statusOutput == 'Cancelled' || statusOutput == 'TimedOut') {
+                            error("Deployment FAILED. Final Status: ${statusOutput}")
+                        } else {
+                            echo "Deployment still in progress. Retrying..."
+                            error("Command not yet completed (Status: ${statusOutput})")
+                        }
+                    }
                 }
             }
         }
