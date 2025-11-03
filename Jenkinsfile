@@ -32,7 +32,7 @@ pipeline {
         stage('Determine Next Image Tag') {
             steps {
                 script {
-                    def stdout = sh(script: "aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --no-paginate --query 'imageIds[*].imageTag' --output text", returnStdout: true).trim()
+                    def stdout = sh(script: 'aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --no-paginate --query "imageIds[*].imageTag" --output text', returnStdout: true).trim()
                     echo "ECR raw tags: '${stdout}'"
 
                     if (!stdout || stdout == 'null' || stdout.trim().isEmpty()) {
