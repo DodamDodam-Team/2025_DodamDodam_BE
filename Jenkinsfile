@@ -32,33 +32,35 @@ pipeline {
         stage('Determine Next Image Tag') {
             steps {
                 script {
-                    def stdout = sh(script: "aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --query 'imageIds[*].imageTag' --output text", returnStdout: true).trim()
-                    def existingTags = []
-                    if (stdout) {
-                        existingTags = stdout.split("\\s+")
-                    }
+                    def stdout = sh(script: "aws ecr list-images --region ${AWS_REGION} --repository-name ${ECR_REPO} --no-paginate --query 'imageIds[*].imageTag' --output text", returnStdout: true).trim()
+                    echo "ECR raw tags: '${stdout}'"
 
-                    def latestVersion = 'v1.0.0'
+                    if (!stdout || stdout == 'null' || stdout.trim().isEmpty()) {
+                        echo "No existing images found. Starting with v1.0.0"
+                        env.IMAGE_TAG = 'v1.0.0'
+                    } else {
+                        def existingTags = stdout.split("\\s+")
+                        def semver = ~/v\\d+\\.\\d+\\.\\d+/
+                        def versions = existingTags.findAll { it ==~ semver }
 
-                    if (existingTags && existingTags.size() > 0) {
-                        def versions = existingTags.findAll { it ==~ /v\\d+\\.\\d+\\.\\d+/ }
                         if (versions && versions.size() > 0) {
                             versions.sort { a, b ->
                                 def aParts = a.replace('v','').split('\\.').collect { it.toInteger() }
                                 def bParts = b.replace('v','').split('\\.').collect { it.toInteger() }
                                 for (int i=0; i<3; i++) {
-                                    def diff = aParts[i] - bParts[i]
+                                    def diff = bParts[i] - aParts[i]
                                     if (diff != 0) return diff
                                 }
                                 return 0
                             }
-                            def last = versions[-1].replace('v','').split('\\.').collect { it.toInteger() }
+                            def last = versions[0].replace('v','').split('\\.').collect { it.toInteger() }
                             last[2] += 1
-                            latestVersion = "v${last.join('.')}"
+                            env.IMAGE_TAG = "v${last.join('.')}"
+                        } else {
+                            env.IMAGE_TAG = 'v1.0.0'
                         }
                     }
 
-                    env.IMAGE_TAG = latestVersion
                     env.DOCKER_IMAGE = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${env.IMAGE_TAG}"
                     echo "Next Docker Image Tag: ${env.IMAGE_TAG}"
                 }
@@ -69,15 +71,8 @@ pipeline {
             steps {
                 echo "Building Spring Boot App with Gradle"
                 script {
-                    if (fileExists('gradlew')) {
-                        sh 'chmod +x gradlew || true'
-                        sh './gradlew clean build -x test'
-                    } else if (fileExists('gradle/wrapper/gradle-wrapper.jar')) {
-                        sh 'chmod +x gradlew || true'
-                        sh './gradlew clean build -x test'
-                    } else {
-                        sh 'gradle clean build -x test'
-                    }
+                    sh "chmod +x gradlew"
+                    sh "./gradlew clean build"
                 }
             }
         }
