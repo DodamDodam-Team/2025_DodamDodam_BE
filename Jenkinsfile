@@ -76,7 +76,7 @@ pipeline {
                 script {
                     sh '''
                     chmod +x gradlew
-                    export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto
+                    export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64
                     export PATH=$JAVA_HOME/bin:$PATH
                     ./gradlew clean build -x test -Dorg.gradle.java.home=$JAVA_HOME
                     '''
