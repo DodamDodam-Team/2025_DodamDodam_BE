@@ -170,7 +170,13 @@ pipeline {
                         "sh -c 'rm -f /tmp/app_env'" 
                     ]
 
-                    def esc = { s -> s == null ? "" : s.replace('\\','\\\\').replace('"','\\"') }
+                    def esc = { s ->
+                        if (s == null) return ""
+                        return s.replace('\\','\\\\')
+                                .replace('"','\\"')
+                                .replace('\r','\\r')
+                                .replace('\n','\\n')
+                    }
                     def commandsJsonArray = '[' + commands.collect { '"' + esc(it) + '"' }.join(',') + ']'
                     def paramsJson = '{"commands":' + commandsJsonArray + '}'
 
