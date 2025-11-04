@@ -142,7 +142,7 @@ pipeline {
                         "docker run -d -p 8080:8080 --name dodam-cnt -e SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC -e SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER} -e SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD} ${env.DOCKER_IMAGE}"
                     ]
 
-                    def commandsJson = groovy.json.JsonOutput.toJson(commands)
+                    def commandsJson = new groovy.json.JsonBuilder(commands).toString()
 
                     def commandOutput = sh(
                         script: """
