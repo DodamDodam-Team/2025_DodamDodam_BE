@@ -164,17 +164,10 @@ pipeline {
                         "docker pull ${env.DOCKER_IMAGE}",
                         "docker stop dodam-cnt || true",
                         "docker rm dodam-cnt || true",
-                        "echo \"SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4\" > /tmp/app_env",
-                        "echo \"SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER}\" >> /tmp/app_env",
-                        "echo \"SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD}\" >> /tmp/app_env",
-                        "echo \"SPRING_PROFILES_ACTIVE=prod\" >> /tmp/app_env",
-                        "echo \"JWT_SECRET_KEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
-                        "echo \"JWT_SECRETKEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
-                        "echo \"JWT_SECRET=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
-                        "echo \"SPRING_APPLICATION_JSON={\\\"jwt\\\":{\\\"secretKey\\\":\\\"${env.JWT_SECRET_KEY}\\\"}}\" >> /tmp/app_env",
+                        "cat > /tmp/app_env <<'ENV'\nSPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8\nSPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER}\nSPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD}\nSPRING_PROFILES_ACTIVE=prod\nJWT_SECRET_KEY=${env.JWT_SECRET_KEY}\nJWT_SECRETKEY=${env.JWT_SECRET_KEY}\nJWT_SECRET=${env.JWT_SECRET_KEY}\nSPRING_APPLICATION_JSON={\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}\nENV",
                         "chmod 600 /tmp/app_env",
                         "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
-                        "sh -c 'rm -f /tmp/app_env'"
+                        "sh -c 'rm -f /tmp/app_env'" 
                     ]
 
                     def esc = { s -> s == null ? "" : s.replace('\\','\\\\').replace('"','\\"') }
