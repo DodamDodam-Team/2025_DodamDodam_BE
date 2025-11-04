@@ -45,19 +45,15 @@ pipeline {
                         def semver = ~/v\d+\.\d+\.\d+/
                         def versions = existingTags.findAll { it ==~ semver }
 
-
                         if (versions && versions.size() > 0) {
-                            versions.sort { a, b ->
-                                def aParts = a.replace('v','').split('\\.').collect { it.toInteger() }
-                                def bParts = b.replace('v','').split('\\.').collect { it.toInteger() }
-                                for (int i=0; i<3; i++) {
-                                    def diff = aParts[i] - bParts[i]
-                                    if (diff != 0) return diff
-                                }
-                                return 0
+                            def latest = versions.max { tag ->
+                                def parts = tag.replace('v','').split('\\.').collect { it.toInteger() }
+                                parts[0] * 10000 + parts[1] * 100 + parts[2]
                             }
 
-                            def last = versions[-1].replace('v','').split('\\.').collect { it.toInteger() }
+                            echo "Latest tag found: ${latest}"
+
+                            def last = latest.replace('v','').split('\\.').collect { it.toInteger() }
                             last[2] += 1
                             env.IMAGE_TAG = "v${last.join('.')}"
                         } else {
@@ -70,6 +66,7 @@ pipeline {
                 }
             }
         }
+
 
         stage('Build Spring Boot') {
             steps {
