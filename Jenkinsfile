@@ -127,9 +127,10 @@ pipeline {
                         "docker pull ${env.DOCKER_IMAGE}",
                         "docker stop dodam-cnt || true",
                         "docker rm dodam-cnt || true",
-                        "echo \"SPRING_DATASOURCE_URL='jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC'\" > /tmp/app_env",
-                        "echo \"SPRING_DATASOURCE_USERNAME='${env.RDS_DB_USER}'\" >> /tmp/app_env",
-                        "echo \"SPRING_DATASOURCE_PASSWORD='${env.RDS_DB_PASSWORD}'\" >> /tmp/app_env",
+                        "echo \"SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4\" > /tmp/app_env",
+                        "echo \"SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER}\" >> /tmp/app_env",
+                        "echo \"SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD}\" >> /tmp/app_env",
+                        "echo \"SPRING_PROFILES_ACTIVE=prod\" >> /tmp/app_env",
                         "chmod 600 /tmp/app_env",
                         "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
                         "sh -c 'rm -f /tmp/app_env'"
@@ -158,7 +159,6 @@ pipeline {
                     env.SSM_COMMAND_ID = commandId
                     echo "SSM Command ID: ${env.SSM_COMMAND_ID}"
 
-                    // Remove temporary params file from agent to avoid leaving secrets on disk
                     sh(script: "rm -f ${tmpFile} || true")
 
                     echo "2. Polling SSM Command Status for ID: ${env.SSM_COMMAND_ID}"
