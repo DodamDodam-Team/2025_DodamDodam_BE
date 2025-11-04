@@ -167,7 +167,7 @@ pipeline {
                     envArgsList << "-e JWT_SECRET_KEY='${env.JWT_SECRET_KEY}'"
                     envArgsList << "-e JWT_SECRETKEY='${env.JWT_SECRET_KEY}'"
                     envArgsList << "-e JWT_SECRET='${env.JWT_SECRET_KEY}'"
-                    envArgsList << "-e SPRING_APPLICATION_JSON='{"jwt":{"secretKey":"${env.JWT_SECRET_KEY}"}}'"
+                    envArgsList << "-e SPRING_APPLICATION_JSON='{\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}'"
                     def envArgs = envArgsList.join(' ')
 
                     def commands = [
