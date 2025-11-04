@@ -159,15 +159,23 @@ pipeline {
                 script {
                     echo "1. Sending Deployment Command to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
 
+                    def envArgsList = []
+                    envArgsList << "-e SPRING_PROFILES_ACTIVE=prod"
+                    envArgsList << "-e SPRING_DATASOURCE_URL='jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8'"
+                    envArgsList << "-e SPRING_DATASOURCE_USERNAME='${env.RDS_DB_USER}'"
+                    envArgsList << "-e SPRING_DATASOURCE_PASSWORD='${env.RDS_DB_PASSWORD}'"
+                    envArgsList << "-e JWT_SECRET_KEY='${env.JWT_SECRET_KEY}'"
+                    envArgsList << "-e JWT_SECRETKEY='${env.JWT_SECRET_KEY}'"
+                    envArgsList << "-e JWT_SECRET='${env.JWT_SECRET_KEY}'"
+                    envArgsList << "-e SPRING_APPLICATION_JSON='{"jwt":{"secretKey":"${env.JWT_SECRET_KEY}"}}'"
+                    def envArgs = envArgsList.join(' ')
+
                     def commands = [
                         "aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com",
                         "docker pull ${env.DOCKER_IMAGE}",
                         "docker stop dodam-cnt || true",
                         "docker rm dodam-cnt || true",
-                        "cat > /tmp/app_env <<'ENV'\nSPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8\nSPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER}\nSPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD}\nSPRING_PROFILES_ACTIVE=prod\nJWT_SECRET_KEY=${env.JWT_SECRET_KEY}\nJWT_SECRETKEY=${env.JWT_SECRET_KEY}\nJWT_SECRET=${env.JWT_SECRET_KEY}\nSPRING_APPLICATION_JSON={\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}\nENV",
-                        "chmod 600 /tmp/app_env",
-                        "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
-                        "sh -c 'rm -f /tmp/app_env'" 
+                        "docker run -d -p 8080:8080 --name dodam-cnt ${envArgs} ${env.DOCKER_IMAGE}"
                     ]
 
                     def esc = { s ->
