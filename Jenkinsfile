@@ -44,14 +44,6 @@ pipeline {
                     env.RDS_DB_NAME = secret.RDS_DB_NAME?.toString()
                     env.RDS_DB_USER = secret.RDS_DB_USER?.toString()
                     env.RDS_DB_PASSWORD = secret.RDS_DB_PASSWORD?.toString()
-
-                    if (!env.RDS_DB_ADDRESS) {
-                        error("RDS_DB_ADDRESS not found in Secrets Manager secret ${env.SECRETS_MANAGER_NAME}")
-                    } else {
-                        echo "RDS DB endpoint stored: ${env.RDS_DB_ADDRESS}"
-                        def pwLen = env.RDS_DB_PASSWORD ? env.RDS_DB_PASSWORD.length() : 0
-                        echo "RDS DB password length: ${pwLen} (hidden)"
-                    }
                 }
             }
         }
@@ -137,7 +129,14 @@ pipeline {
                         "docker run -d -p 8080:8080 --name dodam-cnt -e SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC -e SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER} -e SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD} ${env.DOCKER_IMAGE}"
                     ]
 
-                    def commandsJson = new groovy.json.JsonBuilder(commands).toString()
+                    // Build JSON array manually (escape quotes/backslashes) to avoid sandbox restrictions
+                    def esc = { s -> s == null ? "" : s.replace('\\','\\\\').replace('"','\\"') }
+                    def commandsJsonArray = '[' + commands.collect { '"' + esc(it) + '"' }.join(',') + ']'
+                    def paramsJson = '{"commands":' + commandsJsonArray + '}'
+
+                    // write params to a temp file on the agent and pass via file:// to aws cli to avoid quoting issues
+                    def tmpFile = "/tmp/ssm_params_${env.BUILD_ID ?: env.BUILD_NUMBER ?: 'tmp'}.json"
+                    sh(script: "cat > ${tmpFile} <<'JSON'\n${paramsJson}\nJSON")
 
                     def commandOutput = sh(
                         script: """
@@ -145,7 +144,7 @@ pipeline {
                                 --targets 'Key=tag:Name,Values=${env.EC2_NAME_TAG}' \\
                                 --document-name 'AWS-RunShellScript' \\
                                 --comment 'Deploy latest Docker image: ${env.DOCKER_IMAGE}' \\
-                                --parameters commands='${commandsJson}' \\
+                                --parameters file://${tmpFile} \\
                                 --region ${env.AWS_REGION}
                         """,
                         returnStdout: true
