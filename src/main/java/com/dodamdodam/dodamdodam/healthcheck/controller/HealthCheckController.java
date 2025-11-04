@@ -9,9 +9,8 @@ import java.util.Map;
 @RestController
 public class HealthCheckController {
 
-	@GetMapping("/healthcheck")
-	public ResponseEntity<Map<String, String>> healthcheck() {
-		return ResponseEntity.ok(Collections.singletonMap("status", "ok"));
-	}
-
+    @GetMapping("/healthcheck")
+    public ResponseEntity<Map<String, String>> healthcheck() {
+        return ResponseEntity.ok(Collections.singletonMap("status", "ok"));
+    }
 }
