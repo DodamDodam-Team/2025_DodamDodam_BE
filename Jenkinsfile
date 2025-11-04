@@ -32,55 +32,12 @@ pipeline {
         stage('Get Environment Variable on Secrets Manager') {
             steps {
                 script {
-                    def jwtSecretJson = ''
-                    try {
-                        jwtSecretJson = sh(
-                            script: "aws secretsmanager get-secret-value --secret-id ${env.JWT_SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        echo "JWT secrets not found at ${env.JWT_SECRETS_MANAGER_NAME}: ${e.getMessage()}"
-                        jwtSecretJson = ''
-                    }
-
-                    def secretJson = ''
-                    try {
-                        secretJson = sh(
-                            script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        error("Failed to read DB secrets from ${env.DB_SECRETS_MANAGER_NAME}: ${e.getMessage()}")
-                    }
-
-                    def secret = new groovy.json.JsonSlurper().parseText(secretJson)
-
-                    env.RDS_DB_ADDRESS = secret.RDS_DB_ADDRESS?.toString()
-                    env.RDS_DB_PORT = secret.RDS_DB_PORT?.toString()
-                    env.RDS_DB_NAME = secret.RDS_DB_NAME?.toString()
-                    env.RDS_DB_USER = secret.RDS_DB_USER?.toString()
-                    env.RDS_DB_PASSWORD = secret.RDS_DB_PASSWORD?.toString()
-
-                    env.JWT_SECRET_KEY = ''
-                    if (jwtSecretJson) {
-                        def jwtSecret = new groovy.json.JsonSlurper().parseText(jwtSecretJson)
-                        env.JWT_SECRET_KEY = jwtSecret.JWT_SECRET_KEY?.toString() ?: jwtSecret.jwtSecret?.toString() ?: jwtSecret.jwt_secret?.toString() ?: jwtSecret.JWT_SECRET?.toString() ?: ''
-                        echo "Loaded JWT secret from ${env.JWT_SECRETS_MANAGER_NAME}"
-                    }
-
-                    if (!env.JWT_SECRET_KEY || env.JWT_SECRET_KEY.trim().isEmpty()) {
-                        env.JWT_SECRET_KEY = secret.JWT_SECRET_KEY?.toString() ?: secret.jwtSecret?.toString() ?: secret.jwt_secret?.toString() ?: secret.JWT_SECRET?.toString() ?: ''
-                        if (env.JWT_SECRET_KEY) {
-                            echo "Loaded JWT secret from ${env.DB_SECRETS_MANAGER_NAME}"
-                        }
-                    }
-
-                    if (!env.JWT_SECRET_KEY || env.JWT_SECRET_KEY.trim().isEmpty()) {
-                        echo "No JWT secret found in Secrets Manager — generating an ephemeral secret for this deploy."
-                        def random = new byte[64]
-                        new java.security.SecureRandom().nextBytes(random)
-                        env.JWT_SECRET_KEY = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(random)
-                    }
+                    env.RDS_DB_ADDRESS = sh(script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text | jq -r .RDS_DB_ADDRESS", returnStdout: true).trim()
+                    env.RDS_DB_NAME = sh(script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text | jq -r .RDS_DB_NAME", returnStdout: true).trim()
+                    env.RDS_DB_PASSWORD = sh(script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text | jq -r .RDS_DB_PASSWORD", returnStdout: true).trim()
+                    env.RDS_DB_PORT = sh(script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text | jq -r .RDS_DB_PORT", returnStdout: true).trim()
+                    env.RDS_DB_USER = sh(script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text | jq -r .RDS_DB_USER", returnStdout: true).trim()
+                    env.JWT_SECRET_KEY = sh(script: "aws secretsmanager get-secret-value --secret-id ${env.JWT_SECRETS_MANAGER_NAME} --query SecretString --output text | jq -r .JWT_SECRET_KEY", returnStdout: true).trim()
                 }
             }
         }
@@ -146,8 +103,7 @@ pipeline {
                     echo "Building and Pushing Docker Image: ${env.DOCKER_IMAGE}"
                     sh """
                         docker build -t ${env.DOCKER_IMAGE} .
-                        aws ecr get-login-password --region ${env.AWS_REGION} \
-                            | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com
+                        aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com
                         docker push ${env.DOCKER_IMAGE}
                     """
                 }
@@ -159,45 +115,27 @@ pipeline {
                 script {
                     echo "1. Sending Deployment Command to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
 
-                    def envArgsList = []
-                    envArgsList << "-e SPRING_PROFILES_ACTIVE=prod"
-                    envArgsList << "-e SPRING_DATASOURCE_URL='jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8'"
-                    envArgsList << "-e SPRING_DATASOURCE_USERNAME='${env.RDS_DB_USER}'"
-                    envArgsList << "-e SPRING_DATASOURCE_PASSWORD='${env.RDS_DB_PASSWORD}'"
-                    envArgsList << "-e JWT_SECRET_KEY='${env.JWT_SECRET_KEY}'"
-                    envArgsList << "-e JWT_SECRETKEY='${env.JWT_SECRET_KEY}'"
-                    envArgsList << "-e JWT_SECRET='${env.JWT_SECRET_KEY}'"
-                    envArgsList << "-e SPRING_APPLICATION_JSON='{\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}'"
-                    def envArgs = envArgsList.join(' ')
-
-                    def commands = [
-                        "aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com",
-                        "docker pull ${env.DOCKER_IMAGE}",
-                        "docker stop dodam-cnt || true",
-                        "docker rm dodam-cnt || true",
-                        "docker run -d -p 8080:8080 --name dodam-cnt ${envArgs} ${env.DOCKER_IMAGE}"
-                    ]
-
-                    def esc = { s ->
-                        if (s == null) return ""
-                        return s.replace('\\','\\\\')
-                                .replace('"','\\"')
-                                .replace('\r','\\r')
-                                .replace('\n','\\n')
-                    }
-                    def commandsJsonArray = '[' + commands.collect { '"' + esc(it) + '"' }.join(',') + ']'
-                    def paramsJson = '{"commands":' + commandsJsonArray + '}'
-
-                    def tmpFile = "/tmp/ssm_params_${env.BUILD_ID ?: env.BUILD_NUMBER ?: 'tmp'}.json"
-                    sh(script: "cat > ${tmpFile} <<'JSON'\n${paramsJson}\nJSON")
-
                     def commandOutput = sh(
                         script: """
                             aws ssm send-command \\
-                                --targets 'Key=tag:Name,Values=${env.EC2_NAME_TAG}' \\
-                                --document-name 'AWS-RunShellScript' \\
-                                --comment 'Deploy latest Docker image: ${env.DOCKER_IMAGE}' \\
-                                --parameters file://${tmpFile} \\
+                                --targets "Key=tag:Name,Values=${env.EC2_NAME_TAG}" \\
+                                --document-name "AWS-RunShellScript" \\
+                                --comment "Deploy latest Docker image: ${env.DOCKER_IMAGE}" \\
+                                --parameters 'commands=[
+                                    "docker pull ${env.DOCKER_IMAGE}",
+                                    "docker stop dodam-cnt  || true",
+                                    "docker rm dodam-cnt  || true",
+                                    docker run -d -p 8080:8080 --name dodam-cnt \
+                                        -e SPRING_PROFILES_ACTIVE=prod \
+                                        -e SPRING_DATASOURCE_URL="jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8" \
+                                        -e SPRING_DATASOURCE_USERNAME="${env.RDS_DB_USER}" \
+                                        -e SPRING_DATASOURCE_PASSWORD="${env.RDS_DB_PASSWORD}" \
+                                        -e JWT_SECRET_KEY="${env.JWT_SECRET_KEY}" \
+                                        -e JWT_SECRET="${env.JWT_SECRET}" \
+                                        -e JWT_SECRETKEY="${env.JWT_SECRETKEY}" \
+                                        -e SPRING_APPLICATION_JSON="{\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}" \
+                                        ${env.DOCKER_IMAGE}
+                                ]' \\
                                 --region ${env.AWS_REGION}
                         """,
                         returnStdout: true
@@ -206,8 +144,6 @@ pipeline {
                     def commandId = new groovy.json.JsonSlurper().parseText(commandOutput).Command.CommandId
                     env.SSM_COMMAND_ID = commandId
                     echo "SSM Command ID: ${env.SSM_COMMAND_ID}"
-
-                    sh(script: "rm -f ${tmpFile} || true")
 
                     echo "2. Polling SSM Command Status for ID: ${env.SSM_COMMAND_ID}"
                     
