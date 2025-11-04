@@ -5,6 +5,7 @@ pipeline {
         AWS_REGION = 'ap-northeast-2'
         ECR_REPO = 'dodam-ecr'
         EC2_NAME_TAG = 'dodam-app-ec2'
+        SECRETS_MANAGER_NAME="dodam-db-secrets"
     }
 
     stages {
@@ -23,6 +24,39 @@ pipeline {
                         returnStdout: true
                     ).trim()
                     echo "AWS Account ID: ${env.AWS_ACCOUNT_ID}"
+                }
+            }
+        }
+
+        stage('Get Environment Variable on DataBase') {
+            steps {
+                script {
+                    env.RDS_DB_ADDRESS = sh(
+                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_ADDRESS'",
+                        returnStdout: true
+                    ).trim()
+
+                    env.RDS_DB_PORT = sh(
+                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_PORT'",
+                        returnStdout: true
+                    ).trim()
+
+                    env.RDS_DB_NAME = sh(
+                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_NAME'",
+                        returnStdout: true
+                    ).trim()
+
+                    env.RDS_DB_USER = sh(
+                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_USER'",
+                        returnStdout: true
+                    ).trim()
+
+                    env.RDS_DB_PASSWORD = sh(
+                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_PASSWORD'",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Fetched RDS DB parameters from Secrets Manager."
                 }
             }
         }
@@ -101,18 +135,22 @@ pipeline {
                 script {
                     echo "1. Sending Deployment Command to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
 
+                    def commands = [
+                        "docker pull ${env.DOCKER_IMAGE}",
+                        "docker stop dodam-cnt  || true",
+                        "docker rm dodam-cnt  || true",
+                        "docker run -d -p 8080:8080 --name dodam-cnt -e SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC -e SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER} -e SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD} ${env.DOCKER_IMAGE}"
+                    ]
+
+                    def commandsJson = groovy.json.JsonOutput.toJson(commands)
+
                     def commandOutput = sh(
                         script: """
                             aws ssm send-command \\
-                                --targets "Key=tag:Name,Values=${env.EC2_NAME_TAG}" \\
-                                --document-name "AWS-RunShellScript" \\
-                                --comment "Deploy latest Docker image: ${env.DOCKER_IMAGE}" \\
-                                --parameters 'commands=[
-                                    "docker pull ${env.DOCKER_IMAGE}",
-                                    "docker stop dodam-cnt  || true",
-                                    "docker rm dodam-cnt  || true",
-                                    "docker run -d -p 8080:8080 --name dodam-cnt ${env.DOCKER_IMAGE}"
-                                ]' \\
+                                --targets 'Key=tag:Name,Values=${env.EC2_NAME_TAG}' \\
+                                --document-name 'AWS-RunShellScript' \\
+                                --comment 'Deploy latest Docker image: ${env.DOCKER_IMAGE}' \\
+                                --parameters commands='${commandsJson}' \\
                                 --region ${env.AWS_REGION}
                         """,
                         returnStdout: true
