@@ -125,15 +125,15 @@ pipeline {
                                     "docker pull ${env.DOCKER_IMAGE}",
                                     "docker stop dodam-cnt  || true",
                                     "docker rm dodam-cnt  || true",
-                                    docker run -d -p 8080:8080 --name dodam-cnt \
-                                        -e SPRING_PROFILES_ACTIVE=prod \
-                                        -e SPRING_DATASOURCE_URL="jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8" \
-                                        -e SPRING_DATASOURCE_USERNAME="${env.RDS_DB_USER}" \
-                                        -e SPRING_DATASOURCE_PASSWORD="${env.RDS_DB_PASSWORD}" \
-                                        -e JWT_SECRET_KEY="${env.JWT_SECRET_KEY}" \
-                                        -e JWT_SECRET="${env.JWT_SECRET}" \
-                                        -e JWT_SECRETKEY="${env.JWT_SECRETKEY}" \
-                                        -e SPRING_APPLICATION_JSON="{\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}" \
+                                    docker run -d -p 8080:8080 --name dodam-cnt \\
+                                        -e SPRING_PROFILES_ACTIVE=prod \\
+                                        -e SPRING_DATASOURCE_URL="jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8" \\
+                                        -e SPRING_DATASOURCE_USERNAME="${env.RDS_DB_USER}" \\
+                                        -e SPRING_DATASOURCE_PASSWORD="${env.RDS_DB_PASSWORD}" \\
+                                        -e JWT_SECRET_KEY="${env.JWT_SECRET_KEY}" \\
+                                        -e JWT_SECRET="${env.JWT_SECRET}" \\
+                                        -e JWT_SECRETKEY="${env.JWT_SECRETKEY}" \\
+                                        -e SPRING_APPLICATION_JSON="{\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}" \\
                                         ${env.DOCKER_IMAGE}
                                 ]' \\
                                 --region ${env.AWS_REGION}
