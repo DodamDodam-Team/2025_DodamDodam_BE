@@ -31,7 +31,6 @@ pipeline {
         stage('Get Environment Variable on DataBase') {
             steps {
                 script {
-                    // Fetch the secret once and parse it in Groovy to avoid multiple AWS calls and jq dependency
                     def secretJson = sh(
                         script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
                         returnStdout: true
@@ -44,6 +43,7 @@ pipeline {
                     env.RDS_DB_NAME = secret.RDS_DB_NAME?.toString()
                     env.RDS_DB_USER = secret.RDS_DB_USER?.toString()
                     env.RDS_DB_PASSWORD = secret.RDS_DB_PASSWORD?.toString()
+                    env.JWT_SECRET_KEY = secret.JWT_SECRET_KEY?.toString() ?: secret.jwtSecret?.toString() ?: secret.jwt_secret?.toString() ?: secret.JWT_SECRET?.toString() ?: ''
                 }
             }
         }
@@ -131,6 +131,9 @@ pipeline {
                         "echo \"SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER}\" >> /tmp/app_env",
                         "echo \"SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD}\" >> /tmp/app_env",
                         "echo \"SPRING_PROFILES_ACTIVE=prod\" >> /tmp/app_env",
+                        "echo \"JWT_SECRET_KEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
+                        "echo \"JWT_SECRETKEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
+                        "echo \"JWT_SECRET=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
                         "chmod 600 /tmp/app_env",
                         "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
                         "sh -c 'rm -f /tmp/app_env'"
