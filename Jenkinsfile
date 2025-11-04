@@ -31,32 +31,27 @@ pipeline {
         stage('Get Environment Variable on DataBase') {
             steps {
                 script {
-                    env.RDS_DB_ADDRESS = sh(
-                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_ADDRESS'",
+                    // Fetch the secret once and parse it in Groovy to avoid multiple AWS calls and jq dependency
+                    def secretJson = sh(
+                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
                         returnStdout: true
                     ).trim()
 
-                    env.RDS_DB_PORT = sh(
-                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_PORT'",
-                        returnStdout: true
-                    ).trim()
+                    def secret = new groovy.json.JsonSlurper().parseText(secretJson)
 
-                    env.RDS_DB_NAME = sh(
-                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_NAME'",
-                        returnStdout: true
-                    ).trim()
+                    env.RDS_DB_ADDRESS = secret.RDS_DB_ADDRESS?.toString()
+                    env.RDS_DB_PORT = secret.RDS_DB_PORT?.toString()
+                    env.RDS_DB_NAME = secret.RDS_DB_NAME?.toString()
+                    env.RDS_DB_USER = secret.RDS_DB_USER?.toString()
+                    env.RDS_DB_PASSWORD = secret.RDS_DB_PASSWORD?.toString()
 
-                    env.RDS_DB_USER = sh(
-                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_USER'",
-                        returnStdout: true
-                    ).trim()
-
-                    env.RDS_DB_PASSWORD = sh(
-                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION} | jq -r '.RDS_DB_PASSWORD'",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Fetched RDS DB parameters from Secrets Manager."
+                    if (!env.RDS_DB_ADDRESS) {
+                        error("RDS_DB_ADDRESS not found in Secrets Manager secret ${env.SECRETS_MANAGER_NAME}")
+                    } else {
+                        echo "RDS DB endpoint stored: ${env.RDS_DB_ADDRESS}"
+                        def pwLen = env.RDS_DB_PASSWORD ? env.RDS_DB_PASSWORD.length() : 0
+                        echo "RDS DB password length: ${pwLen} (hidden)"
+                    }
                 }
             }
         }
@@ -142,7 +137,7 @@ pipeline {
                         "docker run -d -p 8080:8080 --name dodam-cnt -e SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC -e SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER} -e SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD} ${env.DOCKER_IMAGE}"
                     ]
 
-                    def commandsJson = groovy.json.JsonOutput.toJson(commands)
+                    def commandsJson = new groovy.json.JsonBuilder(commands).toString()
 
                     def commandOutput = sh(
                         script: """
