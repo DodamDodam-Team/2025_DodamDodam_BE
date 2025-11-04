@@ -134,6 +134,7 @@ pipeline {
                         "echo \"JWT_SECRET_KEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
                         "echo \"JWT_SECRETKEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
                         "echo \"JWT_SECRET=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
+                        "echo \"SPRING_APPLICATION_JSON={\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}\" >> /tmp/app_env",
                         "chmod 600 /tmp/app_env",
                         "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
                         "sh -c 'rm -f /tmp/app_env'"
