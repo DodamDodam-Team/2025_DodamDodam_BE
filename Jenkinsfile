@@ -5,7 +5,8 @@ pipeline {
         AWS_REGION = 'ap-northeast-2'
         ECR_REPO = 'dodam-ecr'
         EC2_NAME_TAG = 'dodam-app-ec2'
-        SECRETS_MANAGER_NAME="dodam-db-secrets"
+        DB_SECRETS_MANAGER_NAME="dodam-db-secrets"
+        JWT_SECRETS_MANAGER_NAME="dodam-jwt-secrets"
     }
 
     stages {
@@ -28,13 +29,29 @@ pipeline {
             }
         }
 
-        stage('Get Environment Variable on DataBase') {
+        stage('Get Environment Variable on Secrets Manager') {
             steps {
                 script {
-                    def secretJson = sh(
-                        script: "aws secretsmanager get-secret-value --secret-id ${env.SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
-                        returnStdout: true
-                    ).trim()
+                    def jwtSecretJson = ''
+                    try {
+                        jwtSecretJson = sh(
+                            script: "aws secretsmanager get-secret-value --secret-id ${env.JWT_SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
+                            returnStdout: true
+                        ).trim()
+                    } catch (Exception e) {
+                        echo "JWT secrets not found at ${env.JWT_SECRETS_MANAGER_NAME}: ${e.getMessage()}"
+                        jwtSecretJson = ''
+                    }
+
+                    def secretJson = ''
+                    try {
+                        secretJson = sh(
+                            script: "aws secretsmanager get-secret-value --secret-id ${env.DB_SECRETS_MANAGER_NAME} --query SecretString --output text --region ${env.AWS_REGION}",
+                            returnStdout: true
+                        ).trim()
+                    } catch (Exception e) {
+                        error("Failed to read DB secrets from ${env.DB_SECRETS_MANAGER_NAME}: ${e.getMessage()}")
+                    }
 
                     def secret = new groovy.json.JsonSlurper().parseText(secretJson)
 
@@ -43,7 +60,27 @@ pipeline {
                     env.RDS_DB_NAME = secret.RDS_DB_NAME?.toString()
                     env.RDS_DB_USER = secret.RDS_DB_USER?.toString()
                     env.RDS_DB_PASSWORD = secret.RDS_DB_PASSWORD?.toString()
-                    env.JWT_SECRET_KEY = secret.JWT_SECRET_KEY?.toString() ?: secret.jwtSecret?.toString() ?: secret.jwt_secret?.toString() ?: secret.JWT_SECRET?.toString() ?: ''
+
+                    env.JWT_SECRET_KEY = ''
+                    if (jwtSecretJson) {
+                        def jwtSecret = new groovy.json.JsonSlurper().parseText(jwtSecretJson)
+                        env.JWT_SECRET_KEY = jwtSecret.JWT_SECRET_KEY?.toString() ?: jwtSecret.jwtSecret?.toString() ?: jwtSecret.jwt_secret?.toString() ?: jwtSecret.JWT_SECRET?.toString() ?: ''
+                        echo "Loaded JWT secret from ${env.JWT_SECRETS_MANAGER_NAME}"
+                    }
+
+                    if (!env.JWT_SECRET_KEY || env.JWT_SECRET_KEY.trim().isEmpty()) {
+                        env.JWT_SECRET_KEY = secret.JWT_SECRET_KEY?.toString() ?: secret.jwtSecret?.toString() ?: secret.jwt_secret?.toString() ?: secret.JWT_SECRET?.toString() ?: ''
+                        if (env.JWT_SECRET_KEY) {
+                            echo "Loaded JWT secret from ${env.DB_SECRETS_MANAGER_NAME}"
+                        }
+                    }
+
+                    if (!env.JWT_SECRET_KEY || env.JWT_SECRET_KEY.trim().isEmpty()) {
+                        echo "No JWT secret found in Secrets Manager — generating an ephemeral secret for this deploy."
+                        def random = new byte[64]
+                        new java.security.SecureRandom().nextBytes(random)
+                        env.JWT_SECRET_KEY = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(random)
+                    }
                 }
             }
         }
@@ -134,7 +171,7 @@ pipeline {
                         "echo \"JWT_SECRET_KEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
                         "echo \"JWT_SECRETKEY=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
                         "echo \"JWT_SECRET=${env.JWT_SECRET_KEY}\" >> /tmp/app_env",
-                        "echo \"SPRING_APPLICATION_JSON={\"jwt\":{\"secretKey\":\"${env.JWT_SECRET_KEY}\"}}\" >> /tmp/app_env",
+                        "echo \"SPRING_APPLICATION_JSON={\\\"jwt\\\":{\\\"secretKey\\\":\\\"${env.JWT_SECRET_KEY}\\\"}}\" >> /tmp/app_env",
                         "chmod 600 /tmp/app_env",
                         "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
                         "sh -c 'rm -f /tmp/app_env'"
