@@ -123,18 +123,22 @@ pipeline {
                     echo "1. Sending Deployment Command to EC2 instances tagged with Name=${env.EC2_NAME_TAG}"
 
                     def commands = [
+                        "aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com",
                         "docker pull ${env.DOCKER_IMAGE}",
-                        "docker stop dodam-cnt  || true",
-                        "docker rm dodam-cnt  || true",
-                        "docker run -d -p 8080:8080 --name dodam-cnt -e SPRING_DATASOURCE_URL=jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC -e SPRING_DATASOURCE_USERNAME=${env.RDS_DB_USER} -e SPRING_DATASOURCE_PASSWORD=${env.RDS_DB_PASSWORD} ${env.DOCKER_IMAGE}"
+                        "docker stop dodam-cnt || true",
+                        "docker rm dodam-cnt || true",
+                        "echo \"SPRING_DATASOURCE_URL='jdbc:mysql://${env.RDS_DB_ADDRESS}:${env.RDS_DB_PORT}/${env.RDS_DB_NAME}?useSSL=false&serverTimezone=UTC'\" > /tmp/app_env",
+                        "echo \"SPRING_DATASOURCE_USERNAME='${env.RDS_DB_USER}'\" >> /tmp/app_env",
+                        "echo \"SPRING_DATASOURCE_PASSWORD='${env.RDS_DB_PASSWORD}'\" >> /tmp/app_env",
+                        "chmod 600 /tmp/app_env",
+                        "docker run -d -p 8080:8080 --name dodam-cnt --env-file /tmp/app_env ${env.DOCKER_IMAGE}",
+                        "sh -c 'rm -f /tmp/app_env'"
                     ]
 
-                    // Build JSON array manually (escape quotes/backslashes) to avoid sandbox restrictions
                     def esc = { s -> s == null ? "" : s.replace('\\','\\\\').replace('"','\\"') }
                     def commandsJsonArray = '[' + commands.collect { '"' + esc(it) + '"' }.join(',') + ']'
                     def paramsJson = '{"commands":' + commandsJsonArray + '}'
 
-                    // write params to a temp file on the agent and pass via file:// to aws cli to avoid quoting issues
                     def tmpFile = "/tmp/ssm_params_${env.BUILD_ID ?: env.BUILD_NUMBER ?: 'tmp'}.json"
                     sh(script: "cat > ${tmpFile} <<'JSON'\n${paramsJson}\nJSON")
 
@@ -153,6 +157,9 @@ pipeline {
                     def commandId = new groovy.json.JsonSlurper().parseText(commandOutput).Command.CommandId
                     env.SSM_COMMAND_ID = commandId
                     echo "SSM Command ID: ${env.SSM_COMMAND_ID}"
+
+                    // Remove temporary params file from agent to avoid leaving secrets on disk
+                    sh(script: "rm -f ${tmpFile} || true")
 
                     echo "2. Polling SSM Command Status for ID: ${env.SSM_COMMAND_ID}"
                     
