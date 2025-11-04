@@ -30,7 +30,7 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
-    private final RequestLoggingFilter requestLoggingFilter; // 로깅 필터 주입
+    private final RequestLoggingFilter requestLoggingFilter;
 
     private static final String[] SWAGGER_PATHS = {
             "/v3/api-docs/**",
@@ -65,12 +65,12 @@ public class SecurityConfig {
                         .requestMatchers("/error", "/favicon.ico").permitAll()
                         .requestMatchers(
                                 "/api/join",
-                                "/api/login"
+                                "/api/login",
+                                "/healthcheck"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(new JwtAuthFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class)
-                // ✅ 가장 먼저 실행될 필터로 로깅 필터를 추가합니다.
                 .addFilterBefore(requestLoggingFilter, JwtAuthFilter.class);
 
         return http.build();
