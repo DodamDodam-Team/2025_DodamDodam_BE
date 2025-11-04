@@ -51,12 +51,13 @@ pipeline {
                                 def aParts = a.replace('v','').split('\\.').collect { it.toInteger() }
                                 def bParts = b.replace('v','').split('\\.').collect { it.toInteger() }
                                 for (int i=0; i<3; i++) {
-                                    def diff = bParts[i] - aParts[i]
+                                    def diff = aParts[i] - bParts[i]
                                     if (diff != 0) return diff
                                 }
                                 return 0
                             }
-                            def last = versions[0].replace('v','').split('\\.').collect { it.toInteger() }
+
+                            def last = versions[-1].replace('v','').split('\\.').collect { it.toInteger() }
                             last[2] += 1
                             env.IMAGE_TAG = "v${last.join('.')}"
                         } else {

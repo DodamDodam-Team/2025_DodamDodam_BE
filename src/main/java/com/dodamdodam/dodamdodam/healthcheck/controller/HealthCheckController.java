@@ -13,5 +13,4 @@ public class HealthCheckController {
     public ResponseEntity<Map<String, String>> healthcheck() {
         return ResponseEntity.ok(Collections.singletonMap("status", "ok"));
     }
-
 }
